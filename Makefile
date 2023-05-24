@@ -43,12 +43,12 @@ server:
 .PHONY: env
 env:
 	sh scripts/start_db.sh
-	rabbitmq-server -detached
+	sudo rabbitmq-server -detached
 	@echo "RabbitMQ Status: Online"
 
 .PHONY: stopenv
 stopenv:
-	rabbitmqctl stop --idempotent
+	sudo rabbitmqctl stop --idempotent
 	@echo "RabbitMQ Status: Offline"
 	sh scripts/stop_db.sh
 
