@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 import simplejson as json
 
+from base64 import urlsafe_b64decode
+from binascii import Error
+
+from django.contrib.auth import authenticate
 from django.contrib.auth.decorators import permission_required
 from django.core.exceptions import ValidationError
-from django.http import HttpResponseBadRequest, JsonResponse, QueryDict
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse, QueryDict
 from django.views import View
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -85,6 +89,62 @@ class DonorView(View):
             return JsonResponse({}, status=200)
         except ValidationError as e:
             return _error_response(e)
+        except Exception as e:
+            print(e.args)
+            return HttpResponseBadRequest()
+
+
+class DonateView(View):
+    """DonateView
+    - POST: Insert a Donation object based on a Formidable request.
+    """
+    def post(self, request):
+        if "Authorization" not in request.headers:
+            print("Authorization header not found in donate request")
+
+            return HttpResponseForbidden()
+        
+        username_and_password_b64 = request.headers["Authorization"].partition("Basic ")[2]
+        if username_and_password_b64 == "":
+            print("Base64 encoded basic access authentication credentials not found in donate request")
+
+            return HttpResponseForbidden()
+        
+        username_and_password = ""
+        try:
+            username_and_password = urlsafe_b64decode(username_and_password_b64).decode("UTF-8")
+        except Error as e:
+            print("Invalid Base64 encoding of basic access authentication credentials in donate request", e.args)
+
+            return HttpResponseForbidden()
+        
+        username, separator, password = username_and_password.partition(":")
+        if separator == "":
+            print("Invalid basic authentication credentials format in donate request")
+
+        user = authenticate(username=username, password=password)
+        if user is None:
+            print("Failed to authenticate user '" + username_and_password[0] + "' in donate request")
+
+            return HttpResponseForbidden()
+        
+        # TODO: determine how to identify a new donor
+        donor_id = "1"
+        try:
+            donation = Donation.objects.create(
+                donor=Donor.objects.get(id=donor_id),
+                donate_date=timezone.localtime().strptime(
+                    request.POST["created_at"], "%Y-%m-%d").date(),
+                verified=False,
+                # 4jst2 is the key of the postal code field
+                pick_up=request.POST["4jst2"]
+            )
+
+            return HttpResponse()
+        except ValidationError as e:
+            print("Invalid donation in donate request", e.args)
+
+            return HttpResponseBadRequest()
         except Exception as e:
             print(e.args)
             return HttpResponseBadRequest()
